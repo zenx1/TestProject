@@ -21,6 +21,10 @@
             align-items: center;
             justify-content: center;
         }
+
+        .template {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -33,35 +37,76 @@
             </Scripts>
         </telerik:RadScriptManager>
         <script type="text/javascript">
-            const reloadGrid = (sortyBy) => $.get(
-                `Handlers/RTProxy.ashx?sort=${sortyBy}`
-            ).then(response => {
-                const movies = response.grid.list;
+            class Page {
+                #ID
+                #endCursor
+                #loadingNext
+                #hasNextPage
 
-                const gridItemTemplate = $('.grid-item:first').clone();
+                constructor(ID) {
+                    this.#ID = ID;
+                    this.#hasNextPage = true;
 
-                $('.grid-container').html('');
+                    $('.grid-container').html('');
 
-                for (const movie of movies) {
-                    const card = gridItemTemplate.clone();
-
-                    $('.k-card-title', card).html(movie.title);
-                    $('.k-card-subtitle', card).html(movie.releaseDateText);
-                    $('.k-card-body p', card).html(movie.criticsScore.scorePercent == "" ? "-" : movie.criticsScore.scorePercent);
-                    $('.k-card-image', card).attr('src', movie.posterUri);
-                    $('.k-card-footer', card).html(movie.type);
-
-                    $('.grid-container').append(card);
+                    this.loadMoreMovies();
                 }
-            });
 
-            const menuItemClicked = (sender, args) => reloadGrid(
-                $(args.get_domEvent().target).attr('id')
-            );
+                #addMoviesToGridContainer(movies) {
+                    for (const movie of movies) {
+                        const gridItem = $('.grid-item.template').clone();
 
-            $(() => {
-                // jquery click event alternative
-                //$('.rmRootLink').click(ev => reloadGrid($(ev.target).attr('id')));
+                        $('.k-card-title', gridItem).html(movie.title);
+                        $('.k-card-subtitle', gridItem).html(movie.releaseDateText);
+                        $('.k-card-body p', gridItem).html(movie.criticsScore.scorePercent == "" ? "-" : movie.criticsScore.scorePercent);
+                        $('.k-card-image', gridItem).attr('src', movie.posterUri);
+                        $('.k-card-footer', gridItem).html(movie.type);
+
+                        $(gridItem).removeClass('template');
+
+                        $('.grid-container').append(gridItem);
+                    }
+                }
+
+                async loadMoreMovies() {
+                    if (this.#loadingNext || !this.#hasNextPage) {
+                        return;
+                    }
+
+                    this.#loadingNext = true;
+
+                    var url = `Handlers/RTProxy.ashx?sort=${this.#ID}`;
+
+                    if (this.#endCursor) {
+                        url += `&endCursor=${this.#endCursor}`;
+                    }
+
+                    const response = await $.get(url);
+
+                    this.#endCursor = response.pageInfo.endCursor;
+
+                    this.#hasNextPage = !!this.#endCursor;
+
+                    this.#addMoviesToGridContainer(response.grid.list);
+
+                    this.#loadingNext = false;
+                }
+            }
+
+            var currentPage = new Page('newest');
+
+            const menuItemClicked = async (sender, args) => {
+                const id = $(args.get_domEvent().target).attr('id');
+
+                currentPage = new Page(id);
+            };
+
+            $(window).on('scroll', async () => {
+                const gridContainer = $('.grid-container');
+
+                if ($(window).scrollTop() >= gridContainer.offset().top + gridContainer.outerHeight() - window.innerHeight) {
+                    currentPage.loadMoreMovies();
+                }
             });
         </script>
         <telerik:RadAjaxManager ID="RadAjaxManager1" runat="server">
@@ -76,33 +121,37 @@
                 </telerik:RadMenuItem>
                 <telerik:RadMenuItem runat="server" ClientIDMode="Static" ID="a_z" Text="A-Z Movies">
                 </telerik:RadMenuItem>
+                <telerik:RadMenuItem runat="server" ClientIDMode="Static" ID="critic_highest" Text="Highest Rated by Critics">
+                </telerik:RadMenuItem>
+                <telerik:RadMenuItem runat="server" ClientIDMode="Static" ID="critic_lowest" Text="Lowest Rated by Critics">
+                </telerik:RadMenuItem>
+                <telerik:RadMenuItem runat="server" ClientIDMode="Static" ID="audience_highest" Text="Highest Rated by Audience">
+                </telerik:RadMenuItem>
+                <telerik:RadMenuItem runat="server" ClientIDMode="Static" ID="audience_lowest" Text="Lowest rated by Audience">
+                </telerik:RadMenuItem>
             </Items>
         </telerik:RadMenu>
 
+        <div class="grid-item template">
+            <telerik:RadCard runat="server" Width="85%" Height="100%">
+                <telerik:CardHeaderComponent runat="server">
+                    <telerik:CardTitleComponent runat="server">
+                    </telerik:CardTitleComponent>
+                    <telerik:CardSubtitleComponent runat="server">
+                    </telerik:CardSubtitleComponent>
+                </telerik:CardHeaderComponent>
+                <telerik:CardBodyComponent runat="server">
+                    <p></p>
+                    <telerik:CardImageComponent runat="server" src='#'></telerik:CardImageComponent>
+                </telerik:CardBodyComponent>
+                <telerik:CardFooterComponent runat="server">
+                    <p></p>
+                </telerik:CardFooterComponent>
+            </telerik:RadCard>
+        </div>
+
         <div class="grid-container">
-            <asp:Repeater runat="server" ID="Repeater1">
-                <ItemTemplate>
-                    <div class="grid-item">
-                        <telerik:RadCard runat="server" Width="85%" Height="100%">
-                            <telerik:CardHeaderComponent runat="server">
-                                <telerik:CardTitleComponent runat="server">
-                                    <%# ((CardData)Container.DataItem).Title %>
-                                </telerik:CardTitleComponent>
-                                <telerik:CardSubtitleComponent runat="server">
-                                    <%# ((CardData)Container.DataItem).ReleaseDate %>
-                                </telerik:CardSubtitleComponent>
-                            </telerik:CardHeaderComponent>
-                            <telerik:CardBodyComponent runat="server">
-                                <p><%# ((CardData)Container.DataItem).CriticsScore %></p>
-                                <telerik:CardImageComponent runat="server" src='<%# ((CardData)Container.DataItem).ImageUrl %>'></telerik:CardImageComponent>
-                            </telerik:CardBodyComponent>
-                            <telerik:CardFooterComponent runat="server">
-                                <p><%# ((CardData)Container.DataItem).Type %></p>
-                            </telerik:CardFooterComponent>
-                        </telerik:RadCard>
-                    </div>
-                </ItemTemplate>
-            </asp:Repeater>
+           
         </div>
     </form>
 </body>

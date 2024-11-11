@@ -10,12 +10,16 @@ public class RTProxy : IHttpHandler
 
     public void ProcessRequest(HttpContext context)
     {
-        if (String.IsNullOrEmpty(context.Request.QueryString["sort"]))
+        string sort = context.Request.QueryString["sort"];
+
+        if (String.IsNullOrEmpty(sort))
         {
             context.Response.End();
         }
 
-        string url = RTUrlBuilder.BuildURL(context.Request.QueryString["sort"], 1);
+        string endCursor = context.Request.QueryString["endCursor"];
+
+        string url = String.IsNullOrEmpty(endCursor) ? RTUrlBuilder.BuildURL(sort) : RTUrlBuilder.BuildURL(sort, endCursor);
 
         string responseBody = BasicHTTPGetRequest.Send(url);
 
